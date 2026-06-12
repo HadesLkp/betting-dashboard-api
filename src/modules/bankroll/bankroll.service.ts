@@ -48,6 +48,26 @@ export class BankrollService {
     return bankrolls[0] ?? null;
   }
 
+  async reverseAmount(amount: number, betId: number) {
+  const bankroll = await this.getCurrent();
+
+  if (!bankroll) {
+    throw new BadRequestException('No bankroll exists');
+  }
+
+  bankroll.currentAmount =
+    Number(bankroll.currentAmount) - Number(amount);
+
+  const updatedBankroll =
+    await this.bankrollRepository.save(bankroll);
+
+  await this.bankrollHistoryRepository.delete({
+    betId,
+  });
+
+  return updatedBankroll;
+}
+
   async updateCurrentAmount(amount: number, betId?: number) {
     const bankroll = await this.getCurrent();
 

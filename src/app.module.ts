@@ -7,6 +7,7 @@ import { AppService } from './app.service';
 import { BetsModule } from './modules/bets/bets.module';
 import { BankrollModule } from './modules/bankroll/bankroll.module';
 import { StatsModule } from './modules/stats/stats.module';
+import { OddsModule } from './modules/odds/odds.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { StatsModule } from './modules/stats/stats.module';
     BetsModule,
     BankrollModule,
     StatsModule,
+    OddsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

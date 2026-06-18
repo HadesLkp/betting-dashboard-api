@@ -228,4 +228,75 @@ export class StatsService {
       markets
     };
   }
+
+  async getPortfolio() {
+    const pendingBets = await this.betRepository.find({
+      where: {
+        result: 'pending',
+      },
+    });
+
+    const openBets = pendingBets.length;
+
+    const pendingStake = pendingBets.reduce(
+      (sum, bet) => sum + Number(bet.stake),
+      0,
+    );
+
+    const potentialProfit = pendingBets.reduce(
+      (sum, bet) =>
+        sum + ((Number(bet.stake) * Number(bet.odds)) - Number(bet.stake)),
+      0,
+    );
+
+    const portfolioEv = pendingBets.reduce((sum, bet) => {
+      const odds = Number(bet.odds);
+      const probability = Number(bet.estimatedProbability) / 100;
+      const stake = Number(bet.stake);
+
+      const evPerUnit =
+        probability * (odds - 1) - (1 - probability);
+
+      return sum + stake * evPerUnit;
+    }, 0);
+
+    const openValueBets = pendingBets.filter((bet) => {
+      const odds = Number(bet.odds);
+      const estimatedProbability = Number(bet.estimatedProbability);
+      const impliedProbability = (1 / odds) * 100;
+
+      return estimatedProbability > impliedProbability;
+    }).length;
+
+    const kellyValues = pendingBets.map((bet) => {
+  const odds = Number(bet.odds);
+  const probability = Number(bet.estimatedProbability) / 100;
+
+  const b = odds - 1;
+  const q = 1 - probability;
+
+  if (b <= 0) {
+    return 0;
+  }
+
+  const kelly = (b * probability - q) / b;
+
+  return Math.max(kelly * 100, 0);
+});
+
+const averageKelly =
+  kellyValues.length > 0
+    ? kellyValues.reduce((sum, value) => sum + value, 0) /
+      kellyValues.length
+    : 0;
+
+    return {
+      openBets,
+      pendingStake,
+      potentialProfit,
+      portfolioEv,
+      openValueBets,
+      averageKelly
+    };
+  }
 }

@@ -57,4 +57,10 @@ export class BetsController {
       updateBetResultDto.result,
     );
   }
+
+  @Post('auto-settle')
+  autoSettle() {
+    return this.betsService.autoSettleMatchWinner();
+  }
+  
 }

@@ -23,4 +23,12 @@ export class OddsController {
       sport,
     );
   }
+
+  @Get('scores')
+  getScores(
+    @Query('sport') sport: string,
+    @Query('eventIds') eventIds?: string,
+  ) {
+    return this.oddsService.getScores(sport, eventIds);
+  }
 }

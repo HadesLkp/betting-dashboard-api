@@ -6,4 +6,7 @@ export class UpdateBetDto {
   odds?: number;
   stake?: number;
   estimatedProbability?: number;
+  oddsEventId?: string;
+  bookmaker?: string;
+  marketKey?: string;
 }

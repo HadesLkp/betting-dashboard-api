@@ -45,4 +45,13 @@ export class Bet {
 
   @CreateDateColumn()
   placedAt: Date;
+
+  @Column({ nullable: true })
+  oddsEventId: string;
+
+  @Column({ nullable: true })
+  bookmaker: string;
+
+  @Column({ nullable: true })
+  marketKey: string;
 }

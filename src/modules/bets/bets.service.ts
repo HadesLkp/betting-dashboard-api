@@ -5,6 +5,7 @@ import { UpdateBetDto } from './dto/update-bet.dto';
 import { Bet } from './entities/bet.entity';
 import { CreateBetDto } from './dto/create-bet.dto';
 import { BankrollService } from '../bankroll/bankroll.service';
+import { OddsService } from '../odds/odds.service';
 
 @Injectable()
 export class BetsService {
@@ -12,6 +13,7 @@ export class BetsService {
     @InjectRepository(Bet)
     private readonly betRepository: Repository<Bet>,
     private readonly bankrollService: BankrollService,
+    private readonly oddsService: OddsService,
   ) { }
 
   async create(createBetDto: CreateBetDto): Promise<Bet> {
@@ -91,6 +93,66 @@ export class BetsService {
 
     return {
       message: 'Bet deleted successfully',
+    };
+  }
+
+  async autoSettleMatchWinner(): Promise<any> {
+    const pendingBets = await this.betRepository.find({
+      where: {
+        result: 'pending',
+        marketKey: 'h2h',
+      },
+    });
+
+    const settled: any[] = [];
+
+    for (const bet of pendingBets) {
+
+      if (!bet.oddsEventId) {
+        continue;
+      }
+      const scores = await this.oddsService.getScores(
+        'soccer_fifa_world_cup',
+        bet.oddsEventId,
+      );
+
+      const event = scores?.[0];
+
+      if (!event || !event.completed || !event.scores?.length) {
+        continue;
+      }
+
+      const homeScore = Number(event.scores[0].score);
+      const awayScore = Number(event.scores[1].score);
+
+      let winningSelection = 'Draw';
+
+      if (homeScore > awayScore) {
+        winningSelection = event.home_team;
+      }
+
+      if (awayScore > homeScore) {
+        winningSelection = event.away_team;
+      }
+
+      const result =
+        bet.selection === winningSelection ? 'win' : 'loss';
+
+      await this.updateResult(bet.id, result as 'win' | 'loss');
+
+      settled.push({
+        betId: bet.id,
+        event: `${event.home_team} vs ${event.away_team}`,
+        finalScore: `${homeScore}-${awayScore}`,
+        selection: bet.selection,
+        result,
+      });
+    }
+
+    return {
+      checked: pendingBets.length,
+      settled: settled.length,
+      details: settled,
     };
   }
 

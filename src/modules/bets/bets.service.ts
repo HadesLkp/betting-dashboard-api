@@ -108,6 +108,13 @@ export class BetsService {
 
     for (const bet of pendingBets) {
 
+       console.log('BET:', {
+    id: bet.id,
+    oddsEventId: bet.oddsEventId,
+    marketKey: bet.marketKey,
+    selection: bet.selection,
+  });
+
       if (!bet.oddsEventId) {
         continue;
       }
@@ -117,6 +124,7 @@ export class BetsService {
       );
 
       const event = scores?.[0];
+      console.log('SCORE EVENT:', event);
 
       if (!event || !event.completed || !event.scores?.length) {
         continue;

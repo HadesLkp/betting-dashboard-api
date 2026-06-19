@@ -54,4 +54,7 @@ export class Bet {
 
   @Column({ nullable: true })
   marketKey: string;
+
+  @Column({ nullable: true })
+  sportKey: string;
 }

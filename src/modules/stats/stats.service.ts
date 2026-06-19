@@ -269,26 +269,72 @@ export class StatsService {
     }).length;
 
     const kellyValues = pendingBets.map((bet) => {
-  const odds = Number(bet.odds);
-  const probability = Number(bet.estimatedProbability) / 100;
+      const odds = Number(bet.odds);
+      const probability = Number(bet.estimatedProbability) / 100;
 
-  const b = odds - 1;
-  const q = 1 - probability;
+      const b = odds - 1;
+      const q = 1 - probability;
 
-  if (b <= 0) {
-    return 0;
-  }
+      if (b <= 0) {
+        return 0;
+      }
 
-  const kelly = (b * probability - q) / b;
+      const kelly = (b * probability - q) / b;
 
-  return Math.max(kelly * 100, 0);
-});
+      return Math.max(kelly * 100, 0);
+    });
 
-const averageKelly =
-  kellyValues.length > 0
-    ? kellyValues.reduce((sum, value) => sum + value, 0) /
-      kellyValues.length
-    : 0;
+    const exposureBySport = pendingBets.reduce((acc, bet) => {
+      const sport = bet.sport || 'UNKNOWN';
+      const stake = Number(bet.stake);
+
+      acc[sport] = (acc[sport] || 0) + stake;
+
+      return acc;
+    }, {} as Record<string, number>);
+
+    const exposureByMarket = pendingBets.reduce((acc, bet) => {
+      const market = bet.market || 'UNKNOWN';
+      const stake = Number(bet.stake);
+
+      acc[market] = (acc[market] || 0) + stake;
+
+      return acc;
+    }, {} as Record<string, number>);
+
+    const averageKelly =
+      kellyValues.length > 0
+        ? kellyValues.reduce((sum, value) => sum + value, 0) /
+        kellyValues.length
+        : 0;
+
+    const bankrolls = await this.bankrollRepository.find({
+      order: {
+        id: 'DESC',
+      },
+      take: 1,
+    });
+
+    const bankroll = bankrolls[0];
+
+    const currentBankroll = bankroll
+      ? Number(bankroll.currentAmount)
+      : 0;
+
+    const riskPercentage =
+      currentBankroll > 0
+        ? (pendingStake / currentBankroll) * 100
+        : 0;
+
+    let riskLevel = 'LOW';
+
+    if (riskPercentage >= 20) {
+      riskLevel = 'MEDIUM';
+    }
+
+    if (riskPercentage >= 40) {
+      riskLevel = 'HIGH';
+    }
 
     return {
       openBets,
@@ -296,7 +342,12 @@ const averageKelly =
       potentialProfit,
       portfolioEv,
       openValueBets,
-      averageKelly
+      averageKelly,
+      exposureBySport,
+      exposureByMarket,
+      currentBankroll,
+      riskPercentage,
+      riskLevel,
     };
   }
 }

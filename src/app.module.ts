@@ -8,6 +8,8 @@ import { BetsModule } from './modules/bets/bets.module';
 import { BankrollModule } from './modules/bankroll/bankroll.module';
 import { StatsModule } from './modules/stats/stats.module';
 import { OddsModule } from './modules/odds/odds.module';
+import { UsersModule } from './modules/users/users.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -34,6 +36,9 @@ import { OddsModule } from './modules/odds/odds.module';
     BankrollModule,
     StatsModule,
     OddsModule,
+    UsersModule,
+    AuthModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

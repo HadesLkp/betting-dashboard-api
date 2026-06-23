@@ -1,7 +1,9 @@
+import { User } from 'src/modules/users/entities/user.entity';
 import {
   Column,
   CreateDateColumn,
   Entity,
+  ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
@@ -57,4 +59,7 @@ export class Bet {
 
   @Column({ nullable: true })
   sportKey: string;
+
+  @ManyToOne(() => User, (user) => user.bets)
+  user: User;
 }

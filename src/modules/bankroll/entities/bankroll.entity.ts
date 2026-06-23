@@ -1,3 +1,5 @@
+import { ManyToOne } from 'typeorm';
+import { User } from '../../users/entities/user.entity';
 import {
   Column,
   CreateDateColumn,
@@ -22,4 +24,7 @@ export class Bankroll {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @ManyToOne(() => User, (user) => user.bankrolls)
+  user: User;
 }

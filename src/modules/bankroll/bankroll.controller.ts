@@ -1,7 +1,17 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BankrollService } from './bankroll.service';
 import { CreateBankrollDto } from './dto/create-bankroll.dto';
 
+@UseGuards(JwtAuthGuard)
 @Controller('bankroll')
 export class BankrollController {
   constructor(
@@ -11,19 +21,25 @@ export class BankrollController {
   @Post()
   create(
     @Body() createBankrollDto: CreateBankrollDto,
+    @Req() req: any,
   ) {
     return this.bankrollService.create(
       createBankrollDto,
+      req.user.id,
     );
   }
 
-  @Get()
-  getCurrent() {
-    return this.bankrollService.getCurrent();
+  @Get('current')
+  getCurrent(@Req() req: any) {
+    return this.bankrollService.getCurrent(
+      req.user.id,
+    );
   }
 
   @Get('history')
-  getHistory() {
-    return this.bankrollService.getHistory();
+  getHistory(@Req() req: any) {
+    return this.bankrollService.getHistory(
+      req.user.id,
+    );
   }
 }

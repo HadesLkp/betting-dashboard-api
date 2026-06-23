@@ -1,34 +1,34 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, Put, Query } from '@nestjs/common';
 import { UpdateBetResultDto } from './dto/update-bet-result.dto';
 import { BetsService } from './bets.service';
+import { UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UpdateBetDto } from './dto/update-bet.dto';
 import { CreateBetDto } from './dto/create-bet.dto';
 import { Bet } from './entities/bet.entity';
 
+@UseGuards(JwtAuthGuard)
 @Controller('bets')
 export class BetsController {
   constructor(private readonly betsService: BetsService) { }
 
   @Post()
-  create(@Body() createBetDto: CreateBetDto): Promise<Bet> {
-    return this.betsService.create(createBetDto);
+  create(
+    @Body() createBetDto: CreateBetDto,
+    @Req() req: any,
+  ): Promise<Bet> {
+    return this.betsService.create(
+      createBetDto,
+      req.user,
+    );
   }
 
   @Get()
   findAll(
-    @Query('sport') sport?: string,
-    @Query('market') market?: string,
-    @Query('result') result?: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
+    @Query() filters: any,
+    @Req() req: any,
   ): Promise<Bet[]> {
-    return this.betsService.findAll({
-      sport,
-      market,
-      result,
-      from,
-      to,
-    });
+    return this.betsService.findAll(filters, req.user.id);
   }
 
   @Put(':id')
@@ -62,5 +62,5 @@ export class BetsController {
   autoSettle() {
     return this.betsService.autoSettleMatchWinner();
   }
-  
+
 }

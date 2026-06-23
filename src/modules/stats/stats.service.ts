@@ -18,7 +18,7 @@ export class StatsService {
     private readonly bankrollHistoryRepository: Repository<BankrollHistory>,
   ) { }
 
-  async getDashboardStats() {
+  async getDashboardStats(userId: number) {
     const bets = await this.betRepository.find();
 
     const totalBets = bets.length;
@@ -229,7 +229,48 @@ export class StatsService {
     };
   }
 
-  async getPortfolio() {
+  async getTopPicks(userId: number) {
+  const pendingBets = await this.betRepository.find({
+    where: {
+      result: 'pending',
+      user: {
+        id: userId,
+      },
+    },
+  });
+
+  const picks = pendingBets.map((bet) => {
+    const odds = Number(bet.odds);
+    const estimatedProbability = Number(bet.estimatedProbability);
+    const impliedProbability = (1 / odds) * 100;
+    const edge = estimatedProbability - impliedProbability;
+
+    const probability = estimatedProbability / 100;
+    const evPerUnit =
+      probability * (odds - 1) - (1 - probability);
+
+    return {
+      id: bet.id,
+      eventName: bet.eventName,
+      market: bet.market,
+      selection: bet.selection,
+      odds,
+      stake: Number(bet.stake),
+      impliedProbability,
+      estimatedProbability,
+      edge,
+      evPerUnit,
+      placedAt: bet.placedAt,
+    };
+  });
+
+  return picks
+    .filter((pick) => pick.edge > 0)
+    .sort((a, b) => b.edge - a.edge)
+    .slice(0, 5);
+}
+
+  async getPortfolio(userId: number) {
     const pendingBets = await this.betRepository.find({
       where: {
         result: 'pending',

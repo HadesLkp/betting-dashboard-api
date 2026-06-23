@@ -16,7 +16,7 @@ export class BetsService {
     private readonly oddsService: OddsService,
   ) { }
 
-  async create(createBetDto: CreateBetDto): Promise<Bet> {
+  async create(createBetDto: CreateBetDto, user: any): Promise<Bet> {
     const impliedProbability = (1 / createBetDto.odds) * 100;
 
     const expectedValue =
@@ -30,6 +30,9 @@ export class BetsService {
       expectedValue,
       result: 'pending',
       profit: 0,
+      user: {
+        id: user.id,
+      },
     });
 
     return this.betRepository.save(bet);
@@ -74,27 +77,31 @@ export class BetsService {
   }
 
   async remove(id: number): Promise<{ message: string }> {
-    const bet = await this.betRepository.findOne({
-      where: { id },
-    });
+  const bet = await this.betRepository.findOne({
+    where: { id },
+    relations: {
+      user: true,
+    },
+  });
 
-    if (!bet) {
-      throw new NotFoundException(`Bet with id ${id} not found`);
-    }
-
-    if (bet.result !== 'pending') {
-      await this.bankrollService.reverseAmount(
-        Number(bet.profit),
-        bet.id,
-      );
-    }
-
-    await this.betRepository.remove(bet);
-
-    return {
-      message: 'Bet deleted successfully',
-    };
+  if (!bet) {
+    throw new NotFoundException(`Bet with id ${id} not found`);
   }
+
+  if (bet.result !== 'pending') {
+    await this.bankrollService.reverseAmount(
+      Number(bet.profit),
+      bet.user.id,
+      bet.id,
+    );
+  }
+
+  await this.betRepository.remove(bet);
+
+  return {
+    message: 'Bet deleted successfully',
+  };
+}
 
   async autoSettleMatchWinner(): Promise<any> {
     const pendingBets = await this.betRepository.find({
@@ -108,12 +115,12 @@ export class BetsService {
 
     for (const bet of pendingBets) {
 
-       console.log('BET:', {
-    id: bet.id,
-    oddsEventId: bet.oddsEventId,
-    marketKey: bet.marketKey,
-    selection: bet.selection,
-  });
+      console.log('BET:', {
+        id: bet.id,
+        oddsEventId: bet.oddsEventId,
+        marketKey: bet.marketKey,
+        selection: bet.selection,
+      });
 
       if (!bet.oddsEventId) {
         continue;
@@ -164,16 +171,11 @@ export class BetsService {
     };
   }
 
-  async findAll(filters?: {
-    sport?: string;
-    market?: string;
-    result?: string;
-    from?: string;
-    to?: string;
-  }): Promise<Bet[]> {
-    const query = this.betRepository
-      .createQueryBuilder('bet')
-      .orderBy('bet.placedAt', 'DESC');
+ async findAll(filters?: any, userId?: number): Promise<Bet[]> {
+  const query = this.betRepository
+    .createQueryBuilder('bet')
+    .where('bet.userId = :userId', { userId })
+    .orderBy('bet.placedAt', 'DESC');
 
     if (filters?.sport) {
       query.andWhere('LOWER(bet.sport) = LOWER(:sport)', {
@@ -242,7 +244,7 @@ export class BetsService {
 
     const updatedBet = await this.betRepository.save(bet);
 
-    await this.bankrollService.updateCurrentAmount(profit, bet.id);
+    await this.bankrollService.updateCurrentAmount(profit, bet.user.id, bet.id);
 
     return updatedBet;
   }

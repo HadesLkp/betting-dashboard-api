@@ -13,17 +13,21 @@ export class BankrollService {
 
     @InjectRepository(BankrollHistory)
     private readonly bankrollHistoryRepository: Repository<BankrollHistory>,
-  ) { }
+  ) {}
 
-  async create(createBankrollDto: CreateBankrollDto) {
-    const existing = await this.bankrollRepository.find({
-      order: {
-        id: 'DESC',
+  async create(
+    createBankrollDto: CreateBankrollDto,
+    userId: number,
+  ) {
+    const existing = await this.bankrollRepository.findOne({
+      where: {
+        user: {
+          id: userId,
+        },
       },
-      take: 1,
     });
 
-    if (existing.length > 0) {
+    if (existing) {
       throw new BadRequestException(
         'A bankroll already exists',
       );
@@ -32,44 +36,35 @@ export class BankrollService {
     const bankroll = this.bankrollRepository.create({
       initialAmount: createBankrollDto.initialAmount,
       currentAmount: createBankrollDto.initialAmount,
+      user: {
+        id: userId,
+      },
     });
 
     return this.bankrollRepository.save(bankroll);
   }
 
-  async getCurrent() {
-    const bankrolls = await this.bankrollRepository.find({
+  async getCurrent(userId: number) {
+    const bankroll = await this.bankrollRepository.findOne({
+      where: {
+        user: {
+          id: userId,
+        },
+      },
       order: {
         id: 'DESC',
       },
-      take: 1,
     });
 
-    return bankrolls[0] ?? null;
+    return bankroll;
   }
 
-  async reverseAmount(amount: number, betId: number) {
-  const bankroll = await this.getCurrent();
-
-  if (!bankroll) {
-    throw new BadRequestException('No bankroll exists');
-  }
-
-  bankroll.currentAmount =
-    Number(bankroll.currentAmount) - Number(amount);
-
-  const updatedBankroll =
-    await this.bankrollRepository.save(bankroll);
-
-  await this.bankrollHistoryRepository.delete({
-    betId,
-  });
-
-  return updatedBankroll;
-}
-
-  async updateCurrentAmount(amount: number, betId?: number) {
-    const bankroll = await this.getCurrent();
+  async updateCurrentAmount(
+    amount: number,
+    userId: number,
+    betId?: number,
+  ) {
+    const bankroll = await this.getCurrent(userId);
 
     if (!bankroll) {
       throw new BadRequestException('No bankroll exists');
@@ -93,12 +88,44 @@ export class BankrollService {
     return updatedBankroll;
   }
 
-  async getHistory() {
+  async reverseAmount(
+    amount: number,
+    userId: number,
+    betId: number,
+  ) {
+    const bankroll = await this.getCurrent(userId);
+
+    if (!bankroll) {
+      throw new BadRequestException('No bankroll exists');
+    }
+
+    bankroll.currentAmount =
+      Number(bankroll.currentAmount) - Number(amount);
+
+    const updatedBankroll =
+      await this.bankrollRepository.save(bankroll);
+
+    await this.bankrollHistoryRepository.delete({
+      betId,
+    });
+
+    return updatedBankroll;
+  }
+
+  async getHistory(userId: number) {
+    const bankroll = await this.getCurrent(userId);
+
+    if (!bankroll) {
+      return [];
+    }
+
     return this.bankrollHistoryRepository.find({
+      where: {
+        bankrollId: bankroll.id,
+      },
       order: {
         createdAt: 'ASC',
       },
     });
   }
-  
 }

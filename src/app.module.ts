@@ -10,6 +10,8 @@ import { StatsModule } from './modules/stats/stats.module';
 import { OddsModule } from './modules/odds/odds.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { PredictorModule } from './modules/predictor/predictor.module'; 
+import { FootballDataModule } from './modules/football-data/football-data.module';
 
 @Module({
   imports: [
@@ -39,6 +41,8 @@ import { AuthModule } from './modules/auth/auth.module';
     UsersModule,
     AuthModule,
     UsersModule,
+    PredictorModule,
+    FootballDataModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,6 +1,9 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { FootballTeam } from './entities/football-team.entity';
 
 @Injectable()
 export class FootballDataService {
@@ -8,6 +11,8 @@ export class FootballDataService {
 
   constructor(
     private readonly httpService: HttpService,
+    @InjectRepository(FootballTeam)
+    private readonly footballTeamRepository: Repository<FootballTeam>,
   ) { }
 
   async searchTeam(name: string) {
@@ -38,6 +43,60 @@ export class FootballDataService {
     }));
   }
 
+  async findOrCreateTeamByName(name: string) {
+  const existingByName = await this.footballTeamRepository.findOne({
+    where: {
+      name,
+    },
+  });
+
+  if (existingByName) {
+    return existingByName;
+  }
+
+  const teams = await this.searchTeam(name);
+
+  if (!teams.length) {
+    return null;
+  }
+
+  const apiTeam = teams[0];
+
+  const existingByApiId = await this.footballTeamRepository.findOne({
+    where: {
+      apiFootballId: apiTeam.id,
+    },
+  });
+
+  if (existingByApiId) {
+    return existingByApiId;
+  }
+
+  const team = this.footballTeamRepository.create({
+    apiFootballId: apiTeam.id,
+    name: apiTeam.name,
+    code: apiTeam.code,
+    country: apiTeam.country,
+    national: apiTeam.national,
+    logo: apiTeam.logo,
+  });
+
+  return this.footballTeamRepository.save(team);
+}
+
+  async resolveMatchTeams(
+    homeTeam: string,
+    awayTeam: string,
+  ) {
+    const home = await this.findOrCreateTeamByName(homeTeam);
+    const away = await this.findOrCreateTeamByName(awayTeam);
+
+    return {
+      homeTeam: home,
+      awayTeam: away,
+    };
+  }
+
   async getTeamLastMatches(teamId: number) {
     const apiKey = process.env.FOOTBALL_API_KEY;
 
@@ -53,7 +112,7 @@ export class FootballDataService {
       }),
     );
 
-    
+
 
     const matches = response.data.response;
 

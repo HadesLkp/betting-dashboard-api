@@ -40,4 +40,20 @@ export class FootballDataController {
       Number(awayTeamId),
     );
   }
+
+  @Get('resolve-team')
+  resolveTeam(@Query('name') name: string) {
+    return this.footballDataService.findOrCreateTeamByName(name);
+  }
+
+  @Get('resolve-match-teams')
+  resolveMatchTeams(
+    @Query('homeTeam') homeTeam: string,
+    @Query('awayTeam') awayTeam: string,
+  ) {
+    return this.footballDataService.resolveMatchTeams(
+      homeTeam,
+      awayTeam,
+    );
+  }
 }

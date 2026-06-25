@@ -6,7 +6,12 @@ import { BankrollService } from './bankroll.service';
 import { Bankroll } from './entities/bankroll.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Bankroll, BankrollHistory])],
+  imports: [
+    TypeOrmModule.forFeature([
+      Bankroll,
+      BankrollHistory,
+    ]),
+  ],
   controllers: [BankrollController],
   providers: [BankrollService],
   exports: [BankrollService],

@@ -2,11 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { AnalyzePickDto } from './dto/analyze-pick.dto';
 import { FootballDataService } from '../football-data/football-data.service';
 import { AnalyzeWithModelDto } from './dto/analyze-with-model.dto';
+import { BankrollService } from '../bankroll/bankroll.service';
+import { AnalyzeEventDto } from './dto/analyze-event.dto';
 
 @Injectable()
 export class PredictorService {
   constructor(
     private readonly footballDataService: FootballDataService,
+    private readonly bankrollService: BankrollService,
   ) { }
 
   analyzePick(dto: AnalyzePickDto) {
@@ -51,7 +54,7 @@ export class PredictorService {
     };
   }
 
-  async analyzeWithModel(dto: AnalyzeWithModelDto) {
+  async analyzeWithModel(dto: AnalyzeWithModelDto, userId: number) {
     const prediction = await this.getMatchProbability(
       Number(dto.homeTeamId),
       Number(dto.awayTeamId),
@@ -93,9 +96,13 @@ export class PredictorService {
     const kellyPercentage =
       Math.max(kelly * 100, 0);
 
-    const bankroll = 1000; // temporal
+    const bankroll = await this.bankrollService.getCurrent(userId);
+
+    const currentBankroll = bankroll
+      ? Number(bankroll.currentAmount)
+      : 0;
     const recommendedStake =
-      bankroll * (kellyPercentage / 100);
+      currentBankroll * (kellyPercentage / 100);
 
     let rating = 'NO_VALUE';
 
@@ -115,7 +122,7 @@ export class PredictorService {
       rating = 'PREMIUM';
     }
 
-    return {
+    const baseResult = {
       homeTeamId: dto.homeTeamId,
       awayTeamId: dto.awayTeamId,
       selectionType: dto.selectionType,
@@ -124,11 +131,86 @@ export class PredictorService {
       impliedProbability,
       edge,
       evPerUnit,
+      currentBankroll,
       kellyPercentage,
       recommendedStake,
       rating,
       recommendation: edge > 0 ? 'VALUE_BET' : 'NO_VALUE',
       prediction,
+    };
+
+    return {
+      ...baseResult,
+      explanation: {
+        positiveReasons: this.buildPositiveExplanation(baseResult),
+      },
+    };
+  }
+
+  buildPositiveExplanation(result: any) {
+    const reasons: string[] = [];
+
+    const homeForm = result.prediction.homeForm;
+    const awayForm = result.prediction.awayForm;
+    const comparison = result.prediction.comparison;
+
+    if (comparison.formScoreDiff > 3) {
+      reasons.push(
+        'El equipo seleccionado llega con mejor forma reciente.',
+      );
+    }
+
+    if (homeForm.avgGoalsFor > awayForm.avgGoalsFor) {
+      reasons.push(
+        `El equipo seleccionado promedia más goles: ${homeForm.avgGoalsFor.toFixed(1)} vs ${awayForm.avgGoalsFor.toFixed(1)}.`,
+      );
+    }
+
+    if (homeForm.avgGoalsAgainst < awayForm.avgGoalsAgainst) {
+      reasons.push(
+        `El equipo seleccionado recibe menos goles: ${homeForm.avgGoalsAgainst.toFixed(1)} vs ${awayForm.avgGoalsAgainst.toFixed(1)}.`,
+      );
+    }
+
+    if (result.edge > 0) {
+      reasons.push(
+        'La probabilidad del modelo supera la probabilidad implícita del mercado.',
+      );
+    }
+
+    return reasons;
+  }
+
+  async analyzeEvent(
+    dto: AnalyzeEventDto,
+    userId: number,
+  ) {
+    const teams =
+      await this.footballDataService.resolveMatchTeams(
+        dto.homeTeam,
+        dto.awayTeam,
+      );
+
+    if (!teams.homeTeam || !teams.awayTeam) {
+      return {
+        message: 'Could not resolve teams',
+        teams,
+      };
+    }
+
+    const result = await this.analyzeWithModel(
+      {
+        homeTeamId: teams.homeTeam.apiFootballId,
+        awayTeamId: teams.awayTeam.apiFootballId,
+        selectionType: dto.selectionType,
+        odds: dto.odds,
+      },
+      userId,
+    );
+
+    return {
+      ...result,
+      teams,
     };
   }
 

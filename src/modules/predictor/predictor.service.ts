@@ -141,9 +141,7 @@ export class PredictorService {
 
     return {
       ...baseResult,
-      explanation: {
-        positiveReasons: this.buildPositiveExplanation(baseResult),
-      },
+      explanation: this.buildSelectionExplanation(baseResult)
     };
   }
 
@@ -294,13 +292,44 @@ export class PredictorService {
     const totalStrength =
       adjustedHomeStrength + adjustedAwayStrength;
 
-    const homeWinProbability =
+    let homeWinProbability =
       totalStrength > 0
         ? (adjustedHomeStrength / totalStrength) * remainingProbability
         : remainingProbability / 2;
 
-    const awayWinProbability =
+    let awayWinProbability =
       remainingProbability - homeWinProbability;
+
+    // Evitar probabilidades negativas o absurdas
+    homeWinProbability = Math.max(
+      1,
+      Math.min(95, homeWinProbability),
+    );
+
+    awayWinProbability = Math.max(
+      1,
+      Math.min(95, awayWinProbability),
+    );
+
+    drawProbability = Math.max(
+      1,
+      Math.min(60, drawProbability),
+    );
+
+    // Normalizar para que todo vuelva a sumar 100
+    const totalProbability =
+      homeWinProbability +
+      drawProbability +
+      awayWinProbability;
+
+    const normalizedHome =
+      (homeWinProbability / totalProbability) * 100;
+
+    const normalizedDraw =
+      (drawProbability / totalProbability) * 100;
+
+    const normalizedAway =
+      (awayWinProbability / totalProbability) * 100;
 
     return {
       homeStrength,
@@ -310,9 +339,107 @@ export class PredictorService {
       adjustedHomeStrength,
       adjustedAwayStrength,
       strengthDiff,
-      homeWinProbability: Number(homeWinProbability.toFixed(2)),
-      drawProbability: Number(drawProbability.toFixed(2)),
-      awayWinProbability: Number(awayWinProbability.toFixed(2)),
+      homeWinProbability: Number(normalizedHome.toFixed(2)),
+      drawProbability: Number(normalizedDraw.toFixed(2)),
+      awayWinProbability: Number(normalizedAway.toFixed(2)),
+    };
+  }
+
+  buildSelectionExplanation(result: any) {
+    const strengths: string[] = [];
+    const weaknesses: string[] = [];
+
+    const {
+      selectionType,
+      modelProbability,
+      edge,
+      prediction,
+    } = result;
+
+    const homeForm = prediction.homeForm;
+    const awayForm = prediction.awayForm;
+    const comparison = prediction.comparison;
+
+    const selectedForm =
+      selectionType === 'HOME' ? homeForm : awayForm;
+
+    const opponentForm =
+      selectionType === 'HOME' ? awayForm : homeForm;
+
+    const selectedLabel =
+      selectionType === 'HOME'
+        ? 'El equipo local'
+        : selectionType === 'AWAY'
+          ? 'El equipo visitante'
+          : 'El empate';
+
+    if (selectionType === 'DRAW') {
+      if (Math.abs(comparison.formScoreDiff) <= 3) {
+        strengths.push(
+          'Los equipos llegan con una diferencia de forma relativamente equilibrada.',
+        );
+      } else {
+        weaknesses.push(
+          'Hay una diferencia importante de forma entre ambos equipos, lo que reduce la fuerza del empate.',
+        );
+      }
+
+      if (modelProbability < 25) {
+        weaknesses.push(
+          `El modelo solo asigna ${modelProbability.toFixed(2)}% de probabilidad al empate.`,
+        );
+      }
+    } else {
+      if (selectedForm.formScore > opponentForm.formScore) {
+        strengths.push(
+          `${selectedLabel} llega con mejor forma reciente.`,
+        );
+      } else {
+        weaknesses.push(
+          `${selectedLabel} llega con peor forma reciente que su rival.`,
+        );
+      }
+
+      if (selectedForm.avgGoalsFor > opponentForm.avgGoalsFor) {
+        strengths.push(
+          `${selectedLabel} promedia más goles: ${selectedForm.avgGoalsFor.toFixed(1)} vs ${opponentForm.avgGoalsFor.toFixed(1)}.`,
+        );
+      } else {
+        weaknesses.push(
+          `${selectedLabel} promedia menos goles: ${selectedForm.avgGoalsFor.toFixed(1)} vs ${opponentForm.avgGoalsFor.toFixed(1)}.`,
+        );
+      }
+
+      if (selectedForm.avgGoalsAgainst < opponentForm.avgGoalsAgainst) {
+        strengths.push(
+          `${selectedLabel} recibe menos goles: ${selectedForm.avgGoalsAgainst.toFixed(1)} vs ${opponentForm.avgGoalsAgainst.toFixed(1)}.`,
+        );
+      } else {
+        weaknesses.push(
+          `${selectedLabel} recibe más goles: ${selectedForm.avgGoalsAgainst.toFixed(1)} vs ${opponentForm.avgGoalsAgainst.toFixed(1)}.`,
+        );
+      }
+
+      if (modelProbability < 30) {
+        weaknesses.push(
+          `El modelo asigna una probabilidad baja a esta selección: ${modelProbability.toFixed(2)}%.`,
+        );
+      }
+    }
+
+    if (edge > 0) {
+      strengths.push(
+        'La probabilidad del modelo supera la probabilidad implícita del mercado.',
+      );
+    } else {
+      weaknesses.push(
+        'La cuota no ofrece valor frente a la probabilidad calculada por el modelo.',
+      );
+    }
+
+    return {
+      strengths,
+      weaknesses,
     };
   }
 }

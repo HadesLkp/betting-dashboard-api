@@ -3,4 +3,5 @@ export class AnalyzeEventDto {
   awayTeam: string;
   selectionType: 'HOME' | 'DRAW' | 'AWAY';
   odds: number;
+  commenceTime?: string;
 }

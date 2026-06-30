@@ -179,38 +179,49 @@ export class PredictorService {
     return reasons;
   }
 
-  async analyzeEvent(
-    dto: AnalyzeEventDto,
-    userId: number,
-  ) {
-    const teams =
-      await this.footballDataService.resolveMatchTeams(
-        dto.homeTeam,
-        dto.awayTeam,
-      );
+  async analyzeEvent(dto: AnalyzeEventDto, userId: number) {
+  console.log('DTO ANALYZE EVENT:', dto);
 
-    if (!teams.homeTeam || !teams.awayTeam) {
-      return {
-        message: 'Could not resolve teams',
-        teams,
-      };
-    }
-
-    const result = await this.analyzeWithModel(
-      {
-        homeTeamId: teams.homeTeam.apiFootballId,
-        awayTeamId: teams.awayTeam.apiFootballId,
-        selectionType: dto.selectionType,
-        odds: dto.odds,
-      },
-      userId,
+  const teams =
+    await this.footballDataService.resolveMatchTeams(
+      dto.homeTeam,
+      dto.awayTeam,
     );
 
+  console.log('TEAMS RESOLVED:', teams);
+
+  if (!teams.homeTeam || !teams.awayTeam) {
     return {
-      ...result,
+      message: 'Could not resolve teams',
       teams,
     };
   }
+
+  const fixture =
+    await this.footballDataService.findFixtureByTeamsAndDate(
+      teams.homeTeam.apiFootballId,
+      teams.awayTeam.apiFootballId,
+      dto.commenceTime,
+    );
+
+  console.log('FIXTURE RESOLVED:', fixture);
+
+  const result = await this.analyzeWithModel(
+    {
+      homeTeamId: teams.homeTeam.apiFootballId,
+      awayTeamId: teams.awayTeam.apiFootballId,
+      selectionType: dto.selectionType,
+      odds: dto.odds,
+    },
+    userId,
+  );
+
+  return {
+    ...result,
+    teams,
+    fixture,
+  };
+}
 
   async getMatchProbability(homeTeamId: number, awayTeamId: number) {
     const matchForm = await this.footballDataService.getMatchForm(

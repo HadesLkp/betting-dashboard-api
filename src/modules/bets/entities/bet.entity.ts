@@ -60,6 +60,27 @@ export class Bet {
   @Column({ nullable: true })
   sportKey: string;
 
+  @Column({ nullable: true })
+  fixtureId: number;
+
+  @Column({ nullable: true })
+  leagueId: number;
+
+  @Column({ nullable: true })
+  season: number;
+
+  @Column({ nullable: true })
+  homeTeamId: number;
+
+  @Column({ nullable: true })
+  awayTeamId: number;
+
+  @Column({ nullable: true })
+  homeTeam: string;
+
+  @Column({ nullable: true })
+  awayTeam: string;
+
   @ManyToOne(() => User, (user) => user.bets)
   user: User;
 }

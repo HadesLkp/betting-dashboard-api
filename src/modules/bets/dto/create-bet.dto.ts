@@ -9,4 +9,11 @@ export class CreateBetDto {
   oddsEventId?: string;
   bookmaker?: string;
   marketKey?: string;
+  fixtureId?: number;
+  leagueId?: number;
+  season?: number;
+  homeTeamId?: number;
+  awayTeamId?: number;
+  homeTeam?: string;
+  awayTeam?: string;
 }

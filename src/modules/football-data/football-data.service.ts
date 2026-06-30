@@ -43,46 +43,140 @@ export class FootballDataService {
     }));
   }
 
+  private normalizeTeamName(name: string): string {
+    const aliases: Record<string, string> = {
+      'DR Congo': 'Congo DR',
+      'Democratic Republic of Congo': 'Congo DR',
+    };
+
+    return aliases[name] || name;
+  }
+
   async findOrCreateTeamByName(name: string) {
-  const existingByName = await this.footballTeamRepository.findOne({
-    where: {
-      name,
-    },
-  });
+    const normalizedName = this.normalizeTeamName(name);
 
-  if (existingByName) {
-    return existingByName;
-  }
+    const existingByName = await this.footballTeamRepository.findOne({
+      where: {
+        name: normalizedName,
+      },
+    });
 
-  const teams = await this.searchTeam(name);
+    if (existingByName) {
+      return existingByName;
+    }
 
-  if (!teams.length) {
-    return null;
-  }
+    const teams = await this.searchTeam(normalizedName);
 
-  const apiTeam = teams[0];
+    if (!teams.length) {
+      return null;
+    }
 
-  const existingByApiId = await this.footballTeamRepository.findOne({
-    where: {
+    const normalizedLower = normalizedName.toLowerCase();
+
+    const apiTeam =
+      teams.find((team: any) =>
+        team.national === true &&
+        team.name.toLowerCase() === normalizedLower
+      ) ||
+      teams.find((team: any) =>
+        team.national === true &&
+        team.name.toLowerCase().includes(normalizedLower)
+      ) ||
+      teams.find((team: any) => team.national === true) ||
+      teams[0];
+
+    const existingByApiId = await this.footballTeamRepository.findOne({
+      where: {
+        apiFootballId: apiTeam.id,
+      },
+    });
+
+    if (existingByApiId) {
+      return existingByApiId;
+    }
+
+    const team = this.footballTeamRepository.create({
       apiFootballId: apiTeam.id,
-    },
-  });
+      name: apiTeam.name,
+      code: apiTeam.code,
+      country: apiTeam.country,
+      national: apiTeam.national,
+      logo: apiTeam.logo,
+    });
 
-  if (existingByApiId) {
-    return existingByApiId;
+    return this.footballTeamRepository.save(team);
   }
 
-  const team = this.footballTeamRepository.create({
-    apiFootballId: apiTeam.id,
-    name: apiTeam.name,
-    code: apiTeam.code,
-    country: apiTeam.country,
-    national: apiTeam.national,
-    logo: apiTeam.logo,
-  });
+  async findFixtureByTeamsAndDate(homeTeamId: number, awayTeamId: number, commenceTime?: string) {
+    const apiKey = process.env.FOOTBALL_API_KEY;
 
-  return this.footballTeamRepository.save(team);
-}
+    if (!apiKey) {
+      throw new BadRequestException('FOOTBALL_API_KEY is not configured');
+    }
+
+    const date = commenceTime
+      ? commenceTime.split('T')[0]
+      : undefined;
+
+    if (!date) {
+      return null;
+    }
+
+    const response = await firstValueFrom(
+      this.httpService.get(`${this.baseUrl}/fixtures`, {
+        headers: {
+          'x-apisports-key': apiKey,
+        },
+        params: {
+          team: homeTeamId,
+          date,
+        },
+      }),
+    );
+
+    const fixtures = response.data.response || [];
+
+    const fixture = fixtures.find((item: any) => {
+      const homeId = item.teams.home.id;
+      const awayId = item.teams.away.id;
+
+      return (
+        homeId === homeTeamId &&
+        awayId === awayTeamId
+      );
+    });
+
+    console.log('SEARCH FIXTURE PARAMS:', {
+      homeTeamId,
+      awayTeamId,
+      commenceTime,
+      date,
+    });
+
+    console.log('FIXTURES FOUND:', fixtures.map((item: any) => ({
+      fixtureId: item.fixture.id,
+      date: item.fixture.date,
+      home: item.teams.home.name,
+      homeId: item.teams.home.id,
+      away: item.teams.away.name,
+      awayId: item.teams.away.id,
+    })));
+
+    if (!fixture) {
+      return null;
+    }
+
+
+
+    return {
+      fixtureId: fixture.fixture.id,
+      leagueId: fixture.league.id,
+      season: fixture.league.season,
+      leagueName: fixture.league.name,
+      round: fixture.league.round,
+      status: fixture.fixture.status.short,
+    };
+  }
 
   async resolveMatchTeams(
     homeTeam: string,

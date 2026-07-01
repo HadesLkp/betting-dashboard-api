@@ -6,6 +6,7 @@ import { Bet } from './entities/bet.entity';
 import { CreateBetDto } from './dto/create-bet.dto';
 import { BankrollService } from '../bankroll/bankroll.service';
 import { OddsService } from '../odds/odds.service';
+import { FootballDataService } from '../football-data/football-data.service';
 
 @Injectable()
 export class BetsService {
@@ -13,7 +14,7 @@ export class BetsService {
     @InjectRepository(Bet)
     private readonly betRepository: Repository<Bet>,
     private readonly bankrollService: BankrollService,
-    private readonly oddsService: OddsService,
+    private readonly footballDataService: FootballDataService,
   ) { }
 
   async create(createBetDto: CreateBetDto, user: any): Promise<Bet> {
@@ -77,77 +78,83 @@ export class BetsService {
   }
 
   async remove(id: number): Promise<{ message: string }> {
-  const bet = await this.betRepository.findOne({
-    where: { id },
-    relations: {
-      user: true,
-    },
-  });
+    const bet = await this.betRepository.findOne({
+      where: { id },
+      relations: {
+        user: true,
+      },
+    });
 
-  if (!bet) {
-    throw new NotFoundException(`Bet with id ${id} not found`);
+    if (!bet) {
+      throw new NotFoundException(`Bet with id ${id} not found`);
+    }
+
+    if (bet.result !== 'pending') {
+      await this.bankrollService.reverseAmount(
+        Number(bet.profit),
+        bet.user.id,
+        bet.id,
+      );
+    }
+
+    await this.betRepository.remove(bet);
+
+    return {
+      message: 'Bet deleted successfully',
+    };
   }
-
-  if (bet.result !== 'pending') {
-    await this.bankrollService.reverseAmount(
-      Number(bet.profit),
-      bet.user.id,
-      bet.id,
-    );
-  }
-
-  await this.betRepository.remove(bet);
-
-  return {
-    message: 'Bet deleted successfully',
-  };
-}
 
   async autoSettleMatchWinner(): Promise<any> {
     const pendingBets = await this.betRepository.find({
       where: {
         result: 'pending',
-        marketKey: 'h2h',
+        market: 'Match Winner',
+      },
+      relations: {
+        user: true,
       },
     });
 
     const settled: any[] = [];
+    const skipped: any[] = [];
 
     for (const bet of pendingBets) {
-
-      console.log('BET:', {
-        id: bet.id,
-        oddsEventId: bet.oddsEventId,
-        marketKey: bet.marketKey,
-        selection: bet.selection,
-      });
-
-      if (!bet.oddsEventId) {
+      if (!bet.fixtureId) {
+        skipped.push({
+          betId: bet.id,
+          reason: 'No fixtureId',
+        });
         continue;
       }
-      const scores = await this.oddsService.getScores(
-        'soccer_fifa_world_cup',
-        bet.oddsEventId,
+
+      const fixture = await this.footballDataService.getFixtureResult(
+        Number(bet.fixtureId),
       );
 
-      const event = scores?.[0];
-      console.log('SCORE EVENT:', event);
-
-      if (!event || !event.completed || !event.scores?.length) {
+      if (!fixture) {
+        skipped.push({
+          betId: bet.id,
+          reason: 'Fixture not found',
+        });
         continue;
       }
 
-      const homeScore = Number(event.scores[0].score);
-      const awayScore = Number(event.scores[1].score);
+      if (fixture.status !== 'FT') {
+        skipped.push({
+          betId: bet.id,
+          reason: `Fixture not finished: ${fixture.status}`,
+        });
+        continue;
+      }
 
       let winningSelection = 'Draw';
 
-      if (homeScore > awayScore) {
-        winningSelection = event.home_team;
+      if (fixture.homeGoals > fixture.awayGoals) {
+        winningSelection = bet.homeTeam;
       }
 
-      if (awayScore > homeScore) {
-        winningSelection = event.away_team;
+      if (fixture.awayGoals > fixture.homeGoals) {
+        winningSelection = bet.awayTeam;
       }
 
       const result =
@@ -157,9 +164,10 @@ export class BetsService {
 
       settled.push({
         betId: bet.id,
-        event: `${event.home_team} vs ${event.away_team}`,
-        finalScore: `${homeScore}-${awayScore}`,
+        event: bet.eventName,
+        finalScore: `${fixture.homeGoals}-${fixture.awayGoals}`,
         selection: bet.selection,
+        winningSelection,
         result,
       });
     }
@@ -167,15 +175,16 @@ export class BetsService {
     return {
       checked: pendingBets.length,
       settled: settled.length,
+      skipped,
       details: settled,
     };
   }
 
- async findAll(filters?: any, userId?: number): Promise<Bet[]> {
-  const query = this.betRepository
-    .createQueryBuilder('bet')
-    .where('bet.userId = :userId', { userId })
-    .orderBy('bet.placedAt', 'DESC');
+  async findAll(filters?: any, userId?: number): Promise<Bet[]> {
+    const query = this.betRepository
+      .createQueryBuilder('bet')
+      .where('bet.userId = :userId', { userId })
+      .orderBy('bet.placedAt', 'DESC');
 
     if (filters?.sport) {
       query.andWhere('LOWER(bet.sport) = LOWER(:sport)', {
@@ -213,6 +222,9 @@ export class BetsService {
   async updateResult(id: number, result: 'win' | 'loss' | 'push'): Promise<Bet> {
     const bet = await this.betRepository.findOne({
       where: { id },
+      relations: {
+        user: true,
+      },
     });
 
     if (!bet) {
@@ -220,9 +232,7 @@ export class BetsService {
     }
 
     if (bet.result !== 'pending') {
-      throw new BadRequestException(
-        'Bet already settled',
-      );
+      throw new BadRequestException('Bet already settled');
     }
 
     let profit = 0;
@@ -244,7 +254,11 @@ export class BetsService {
 
     const updatedBet = await this.betRepository.save(bet);
 
-    await this.bankrollService.updateCurrentAmount(profit, bet.user.id, bet.id);
+    await this.bankrollService.updateCurrentAmount(
+      profit,
+      bet.user.id,
+      bet.id,
+    );
 
     return updatedBet;
   }

@@ -107,66 +107,44 @@ export class FootballDataService {
     return this.footballTeamRepository.save(team);
   }
 
-  async findFixtureByTeamsAndDate(homeTeamId: number, awayTeamId: number, commenceTime?: string) {
+  async findFixtureByTeamsAndDate(
+    homeTeamId: number,
+    awayTeamId: number,
+    commenceTime?: string,
+  ) {
     const apiKey = process.env.FOOTBALL_API_KEY;
 
     if (!apiKey) {
       throw new BadRequestException('FOOTBALL_API_KEY is not configured');
     }
 
-    const date = commenceTime
+    const targetDate = commenceTime
       ? commenceTime.split('T')[0]
-      : undefined;
-
-    if (!date) {
-      return null;
-    }
+      : null;
 
     const response = await firstValueFrom(
-      this.httpService.get(`${this.baseUrl}/fixtures`, {
+      this.httpService.get(`${this.baseUrl}/fixtures/headtohead`, {
         headers: {
           'x-apisports-key': apiKey,
         },
         params: {
-          team: homeTeamId,
-          date,
+          h2h: `${homeTeamId}-${awayTeamId}`,
         },
       }),
     );
 
     const fixtures = response.data.response || [];
 
-    const fixture = fixtures.find((item: any) => {
-      const homeId = item.teams.home.id;
-      const awayId = item.teams.away.id;
-
-      return (
-        homeId === homeTeamId &&
-        awayId === awayTeamId
-      );
-    });
-
-    console.log('SEARCH FIXTURE PARAMS:', {
-      homeTeamId,
-      awayTeamId,
-      commenceTime,
-      date,
-    });
-
-    console.log('FIXTURES FOUND:', fixtures.map((item: any) => ({
-      fixtureId: item.fixture.id,
-      date: item.fixture.date,
-      home: item.teams.home.name,
-      homeId: item.teams.home.id,
-      away: item.teams.away.name,
-      awayId: item.teams.away.id,
-    })));
+    const fixture =
+      fixtures.find((item: any) =>
+        targetDate
+          ? item.fixture.date.startsWith(targetDate)
+          : true,
+      ) || fixtures[0];
 
     if (!fixture) {
       return null;
     }
-
-
 
     return {
       fixtureId: fixture.fixture.id,
@@ -175,6 +153,36 @@ export class FootballDataService {
       leagueName: fixture.league.name,
       round: fixture.league.round,
       status: fixture.fixture.status.short,
+    };
+  }
+
+  async getFixtureResult(fixtureId: number) {
+    const apiKey = process.env.FOOTBALL_API_KEY;
+
+    const response = await firstValueFrom(
+      this.httpService.get(`${this.baseUrl}/fixtures`, {
+        headers: {
+          'x-apisports-key': apiKey,
+        },
+        params: {
+          id: fixtureId,
+        },
+      }),
+    );
+
+    const fixture = response.data.response?.[0];
+
+    if (!fixture) {
+      return null;
+    }
+
+    return {
+      fixtureId: fixture.fixture.id,
+      status: fixture.fixture.status.short,
+      homeTeamId: fixture.teams.home.id,
+      awayTeamId: fixture.teams.away.id,
+      homeGoals: fixture.goals.home,
+      awayGoals: fixture.goals.away,
     };
   }
 
